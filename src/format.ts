@@ -29,6 +29,7 @@ let converter: Converter = new Converter({
 	tables: true, tasklists: true,
 	simpleLineBreaks: true,
 	requireSpaceBeforeHeadingText: true,
+	// @ts-ignore
 	extensions: [showdownHighlight]
 })
 
@@ -93,24 +94,29 @@ export class FormatConverter {
 		return text
 	}
 
-	getAndFormatMedias(note_text: string): string {
-		if (!(this.file_cache.hasOwnProperty("embeds"))) {
-			return note_text
-		}
-		for (let embed of this.file_cache.embeds) {
-			if (note_text.includes(embed.original)) {
-				this.detectedMedia.add(embed.link)
-				if (AUDIO_EXTS.includes(extname(embed.link))) {
-					note_text = note_text.replace(new RegExp(c.escapeRegex(embed.original), "g"), "[sound:" + basename(embed.link) + "]")
-				} else if (IMAGE_EXTS.includes(extname(embed.link))) {
-					note_text = note_text.replace(
-						new RegExp(c.escapeRegex(embed.original), "g"),
-						'<img src="' + basename(embed.link) + '" alt="' + embed.displayText + '">'
-					)
-				} else {
-					console.warn("Unsupported extension: ", extname(embed.link))
+	getAndFormatMedias(note_text) {
+		// By Jeff Chiou thanks to TobiasKlosek's code https://github.com/Pseudonium/Obsidian_to_Anki/issues/245
+		// TODO: support image resize format (ex. ![[og-image.png|200]])
+		// PLAN: create escaped regex pattern for images and audio to capture link and size separately. Add style tag to <img>.
+		let hasAudio = AUDIO_EXTS.some(ext => note_text.includes(ext))
+		let hasImage = IMAGE_EXTS.some(ext => note_text.includes(ext))
+
+		if (hasAudio || hasImage) {
+			let matches = note_text.match(/\!\[\[(.*)\]\]/g)
+			matches.forEach(match => {
+				let link = match.substring(3, match.length - 2)
+
+				this.detectedMedia.add(link)
+				if (AUDIO_EXTS.includes(extname(link))) { // double check instead of just using hasAudio
+					note_text = note_text.replace(new RegExp(c.escapeRegex(match), "g"), "[sound:" + basename(link) + "]")
 				}
-			}
+				else if (IMAGE_EXTS.includes(extname(link))) { // double check instead of just using hasImage
+					note_text = note_text.replace(new RegExp(c.escapeRegex(match), "g"), '<img src="' + basename(link) + '" alt="' + link + '">')
+				}
+				else {
+					console.warn("Unsupported extension: ", extname(link))
+				}
+			})
 		}
 		return note_text
 	}

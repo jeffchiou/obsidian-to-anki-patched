@@ -33,6 +33,36 @@ function note_has_clozes(note: AnkiConnectNote): boolean {
 	return false
 }
 
+/** Function that count occurrences of a substring in a string;
+ * @param {String} string               The string
+ * @param {String} subString            The sub string to search for
+ * @param {Boolean} [allowOverlapping]  Optional. (Default:false)
+ *
+ * @author Vitim.us https://gist.github.com/victornpb/7736865/edit
+ * @see Unit Test https://jsfiddle.net/Victornpb/5axuh96u/
+ * @see http://stackoverflow.com/questions/4009756/how-to-count-string-occurrence-in-string/7924240#7924240
+ * Added by Jeff Chiou to support direct link to line number
+ */
+function count_occurrences(string, subString, allowOverlapping) {
+
+    string += "";
+    subString += "";
+    if (subString.length <= 0) return (string.length + 1);
+
+    var n = 0,
+        pos = 0,
+        step = allowOverlapping ? 1 : subString.length;
+
+    while (true) {
+        pos = string.indexOf(subString, pos);
+        if (pos >= 0) {
+            ++n;
+            pos += step;
+        } else break;
+    }
+    return n;
+}
+
 abstract class AbstractNote {
     text: string
     split_text: string[]
@@ -289,7 +319,12 @@ export class RegexNote {
 		template["modelName"] = this.note_type
 		template["fields"] = this.getFields()
 		const file_link_fields = data.file_link_fields
-		if (url) {
+        // Edited by Jeff Chiou to support direct link to line number
+		if (url && data.use_advanced_uri) {
+            let lineNum = count_occurrences(this.match.input.slice(0,this.match.index), "\n", false)
+            url += `&line=${lineNum}`
+            this.formatter.format_note_with_url(template, url, file_link_fields[this.note_type]);
+        } else if (url) {
             this.formatter.format_note_with_url(template, url, file_link_fields[this.note_type])
         }
         if (Object.keys(frozen_fields_dict).length) {
@@ -301,6 +336,14 @@ export class RegexNote {
 		}
 		if (this.note_type.includes("Cloze") && !(note_has_clozes(template))) {
 			this.identifier = CLOZE_ERROR //An error code that says "don't add this note!"
+		}
+        if (data.add_obs_tags) {
+			for (let key in template["fields"]) {
+				for (let match of template["fields"][key].matchAll(OBS_TAG_REGEXP)) {
+					this.tags.push(match[1])
+				}
+				template["fields"][key] = template["fields"][key].replace(OBS_TAG_REGEXP, "")
+	        }
 		}
 		template["tags"].push(...this.tags)
         template["deckName"] = deck
